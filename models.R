@@ -120,20 +120,20 @@ mod_formulas <- list(
 
 str(data)
 # ------------------------------- initialize models
-mods <- list(c(1:9))
+mods <- list(c(1:length(mod_formulas)))
 
-mods_2nd <- list(c(1:7))
-for (i in c(1:7)) {
-  print(i+9)
-  print(names(mod_formulas)[[i+9]])
-  print(mod_formulas[[i+9]])
-  assign(names(mod_formulas)[[i+9]], define_mod(mod_formulas[[i+9]], list(d = cnn_pic), data, y, "multinoulli"))
-  mods_2nd[[i]] <- get(names(mod_formulas)[[i+9]])
+for (i in c(1:length(mod_formulas))) {
+  assign(names(mod_formulas)[[i]], define_mod(mod_formulas[[i]], list(d = cnn_pic), data, y, "multinoulli"))
+  mods[[i]] <- get(names(mod_formulas)[[i]])
 }
 
+# ------------------------------- fit models - do hp?
+mod_lags_season_ext %>% fit(epochs = 10, early_stopping = TRUE, view_metrics = T)
+plot(mod_lags_season_date_ext)
+
 # ------------------------------- do cv
-for(i in c(1:7)) {
-  mod_tmp_name <- names(mod_formulas)[[i+9]]
+for(i in c(1:(length(mod_formulas)-1))) {
+  mod_tmp_name <- names(mod_formulas)[[i]]
   mod_tmp <- get(mod_tmp_name)
   print(mod_tmp_name)
   assign(paste0(mod_tmp_name, "_cv"), mod_tmp %>% cv(epochs = 50, cv_folds = indcs_final,
@@ -142,17 +142,52 @@ for(i in c(1:7)) {
 }
 
 # ------------------------------- evaluate results
-for(i in c(1:9)) {
+df_results <- data.frame("model" = c(1:16), "Auc" = c(1:16),"val_auc" = c(1:16), "loss" = c(1:16), "val_loss" = c(1:16),
+                         "categorical_accuracy" = c(1:16), "val_categorical_accuracy" = c(1:16),
+                         "categorical_crossentropy" = c(1:16), "val_categorical_crossentropy" = c(1:16),
+                         "python_function" = c(1:16), "val_python_function" = c(1:16))
+for(i in c(1:(length(mod_formulas)-1))) {
   mod_tmp_name <- names(mod_formulas)[[i]]
   cv_result_tmp <- get(paste0(mod_tmp_name, "_cv"))
   v_auc <- c(1:10)
+  v_loss <- c(1:10)
+  auc <- c(1:10)
+  loss <- c(1:10)
+  categorical_accuracy <- c(1:10)
+  categorical_crossentropy <- c(1:10)
+  v_categorical_accuracy <- c(1:10)
+  v_categorical_crossentropy <- c(1:10)
+  v_pf <- c(1:10)
+  pf <- c(1:10)
+  #print("------------------------------------------------------------------")
   for (j in c(1:10)){
     #print("v_auc")
     #print(v_auc)
     #print("cv_res")
     #print(cv_result_tmp[[j]]$metrics$val_auc)
+    #print(cv_result_tmp[[j]]$metrics)
     v_auc[j] <- mean(cv_result_tmp[[j]]$metrics$val_auc)
+    auc[j] <- mean(cv_result_tmp[[j]]$metrics$auc)
+    loss[j] <- mean(cv_result_tmp[[j]]$metrics$loss)
+    v_loss[j] <- mean(cv_result_tmp[[j]]$metrics$val_loss)
+    v_categorical_crossentropy[j] <- mean(cv_result_tmp[[j]]$metrics$val_categorical_crossentropy)
+    categorical_crossentropy[j] <- mean(cv_result_tmp[[j]]$metrics$categorical_crossentropy)
+    v_categorical_accuracy[j] <- mean(cv_result_tmp[[j]]$metrics$val_categorical_accuracy)
+    categorical_accuracy[j] <- mean(cv_result_tmp[[j]]$metrics$categorical_accuracy)
+    v_pf[j] <- mean(cv_result_tmp[[j]]$metrics$val_python_function)
+    pf[j] <- mean(cv_result_tmp[[j]]$metrics$python_function)
+
   }
-  print(paste(mod_tmp_name,mean(v_auc)))
+  #print(paste(mod_tmp_name,mean(v_auc)))
+  df_results[i, ] <- c(mod_tmp_name, mean(auc), mean(v_auc),mean(loss),mean(v_loss),
+                       mean(categorical_accuracy), mean(v_categorical_accuracy),
+                       mean( categorical_crossentropy),mean(v_categorical_crossentropy),
+                       mean(pf), mean(v_pf))
+  saveRDS(cv_result_tmp, file = paste0("06_06_23-cv_", mod_tmp_name))
 }
+df_results
+saveRDS(df_results, file = paste0("06_06_23-cv_overview"))
+
+tmp_cv <- get("mod_lags_season_ext_cv")
+plot(tmp_cv[[4]])
 
