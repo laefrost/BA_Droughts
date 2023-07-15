@@ -8,6 +8,7 @@ library(deepregression)
 library(tidyr)
 library(longCatEDA)
 library(lattice)
+library(caret)
 
 # ------------------------------ Load and convert data into time series format (df)
 df_og <- read.csv2("GWL_1900-2010.csv", sep = ";")
@@ -48,26 +49,55 @@ df <- df %>% arrange(date) %>% drop_na(date) %>%
     lag_8 = lag(value, n = 8),
     lag_9 = lag(value, n = 9),
     lag_10 = lag(value, n = 10),
+    lag_11 = lag(value, n = 11),
+    lag_12 = lag(value, n = 12),
+    lag_13 = lag(value, n = 13),
+    lag_14 = lag(value, n = 14),
+    lag_15 = lag(value, n = 15),
+    lag_16 = lag(value, n = 16),
+    lag_17 = lag(value, n = 17),
+    lag_18 = lag(value, n = 18),
+    lag_19 = lag(value, n = 19),
+    lag_20 = lag(value, n = 20),
+    lag_21 = lag(value, n = 21),
+    lag_22 = lag(value, n = 22),
+    lag_23 = lag(value, n = 23),
+    lag_24 = lag(value, n = 24),
+    lag_25 = lag(value, n = 25),
+    lag_26 = lag(value, n = 26),
+    lag_27 = lag(value, n = 27),
+    lag_28 = lag(value, n = 28),
+    lag_29 = lag(value, n = 29),
+    lag_30 = lag(value, n = 30),
     date_numeric = as.numeric(date),
     day_year = lubridate::yday(date),
     value_num = as.numeric(as.factor(value)) - 1,
     lag_1_num = as.factor(as.numeric(as.factor(lag_1)) - 1),
     lag_2_num = as.factor(as.numeric(as.factor(lag_2)) - 1),
-    lag_3_num = as.factor(as.numeric(as.factor(lag_3)) - 1)
+    lag_3_num = as.factor(as.numeric(as.factor(lag_3)) - 1),
   )
 
 # remove missing day
 df <- df[df$date != "1942-11-30", ]
-
 # relevel gwl to "Other" as reference category
 df$value <- relevel(df$value, ref = "other")
 
+# create shifted vals
+df$group_id <- cumsum(df$value != df$lag_1  | is.na(df$lag_1 ))
+#tmp_df <- df %>% select(group_id, value) %>% group_by(group_id, .drop = FALSE) %>% mutate(value = value) %>% count()
+#str(tmp_df)
+#head(tmp_df)
+#tmp_df <- tmp_df %>% mutate(shift_1 = lag(value, n = 1),
+#                            shift_freq_1 = lag(freq, n = 1),
+#                            shift_2 = lag(value, n = 2),
+#                            shift_freq_2 = lag(freq, n = 2)) %>% select(-c(value))
+#df <- merge(df, tmp_df, by.x = c("group_id"), by.y = c("group_id"),  all.x = TRUE)
+
+#head(df[, c("value", "lag_1", "shift_1", "shift_2", "shift_freq_2", "shift_freq_1")], n = 30)
+#head(tmp_df)
 # remove NA values for lags
-df <- df[-(1:10), , drop = FALSE]
-
+df <- df[-(1:14), , drop = FALSE]
 str(df)
-
-
 # ------------------------------ Load and rescale images
 imgs <- readRDS("mslp_z500.rds")
 imgs_train <- imgs
@@ -77,7 +107,7 @@ imgs_train <- imgs_train/255
 # z500: Geopotential
 # Format: 40541 x 39 x 16 x 2 --> 2 wg. mslp und z500
 str(imgs_train)
-imgs_train <- imgs_train[11:40541, 1:39, 1:16, 1:2]
+imgs_train <- imgs_train[15:40541, 1:39, 1:16, 1:2]
 
 
 # ------------------------------ create list obj. for modellig
@@ -90,6 +120,10 @@ data <- list(
   year = df$year,
   season_num = df$season_num,
   season = df$season,
+  #shift_1 = df$shift_1,
+  #shift_2 = df$shift_2,
+  #shift_freq_1 = df$shift_freq_1,
+  #shift_freq_2 = df$shift_freq_2,
   lag_1 = df$lag_1,
   lag_2 = df$lag_2,
   lag_3 = df$lag_3,
@@ -111,10 +145,11 @@ y <- to_categorical(as.numeric(as.factor(data$gwl))-1)
 
 # ------------------------------ Create Train/Test-Data for CV
 indcs_og <- c(1:length(data$date))
-indcs_ts <- createTimeSlices(indcs_og, initialWindow = 10*365, horizon = 1*365, skip = 11*365, fixedWindow = T)
-indcs_final <- list(c(1:10))
+indcs_ts <- createTimeSlices(indcs_og, initialWindow = 20*365, horizon = 4*365, skip = 24*365, fixedWindow = T)
+str(indcs_ts)
+indcs_final <- list(c(1:4))
 # create list for deepregression cv indices
-for(i in c(1:10)){
+for(i in c(1:4)){
   indcs_final[[i]] <- list(indcs_ts$train[[i]], indcs_ts$test[[i]])
   print(round(table(data$gwl[indcs_ts$train[[i]]])/length(data$gwl[indcs_ts$train[[i]]]), 4))
 }
