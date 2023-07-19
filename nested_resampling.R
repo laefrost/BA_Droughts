@@ -12,8 +12,8 @@ library(caret)
 library(deepregression)
 library(purrr)
 set.seed(123456)
-source("preprocessing.R")
-source("splits.R")
+#source("preprocessing.R")
+#source("splits.R")
 
 # ####################################################### Helpers
 # f1 <- function(y_true, y_pred) {
@@ -75,10 +75,10 @@ source("splits.R")
 # }
 #
 #
- replace_na <- function(x) {
-   x[is.na(x)] <- 0
-   x
- }
+replace_na <- function(x) {
+  x[is.na(x)] <- 0
+  x
+}
 
 ####################################################### Status: Tested and done
 # TITLE: fits model using train - val - test splits
@@ -90,71 +90,95 @@ source("splits.R")
 # learning_rate: hyp. for optimizer
 # df: dataframe containing test values
 # RETURN: list of lists (fit_history and confusion matrix per split)
-rep_ho <- function(x, og_weights, callbacks, splits, x_train, learning_rate, dropout_rate, df, class_weights) {
-  fitted <- lapply(splits, function(split) {
-    this_mod <- x$model
-    this_mod$set_weights(og_weights)
+rep_ho <-
+  function(x,
+           og_weights,
+           callbacks,
+           splits,
+           x_train,
+           learning_rate,
+           dropout_rate,
+           df,
+           class_weights) {
+    fitted <- lapply(splits, function(split) {
+      print("rep_ho")
+      this_mod <- x$model
+      this_mod$set_weights(og_weights)
 
-    train_indcs <- split[[1]]
-    val_indcs <- split[[2]]
-    test_indcs <- split[[3]]
+      train_indcs <- split[[1]]
+      val_indcs <- split[[2]]
+      test_indcs <- split[[3]]
 
-    train_data <- lapply(x_train, function(x)
-      deepregression:::subset_array(x, train_indcs))
-    val_data <- lapply(x_train, function(x)
-      deepregression:::subset_array(x, val_indcs))
-    test_data <- lapply(data, function(x)
-      deepregression:::subset_array(x, test_indcs))
+      train_data <- lapply(x_train, function(x)
+        deepregression:::subset_array(x, train_indcs))
+      val_data <- lapply(x_train, function(x)
+        deepregression:::subset_array(x, val_indcs))
+      test_data <- lapply(data, function(x)
+        deepregression:::subset_array(x, test_indcs))
 
-    args <- list()
-    args <- append(args,
-                        list(object = this_mod,
-                             x = train_data,
-                             y = deepregression:::subset_array(x$init_params$y, train_indcs),
-                             validation_split = NULL,
-                             validation_data = list(
-                               val_data,
-                               deepregression:::subset_array(x$init_params$y, val_indcs)
-                             ),
-                             callbacks = callbacks,
-                             verbose = F,
-                             view_metrics = FALSE,
-                             class_weight = class_weights,
-                             epochs = 50,
-                             batch_size = 32
-                        )
-    )
+      args <- list()
+      args <- append(
+        args,
+        list(
+          object = this_mod,
+          x = train_data,
+          y = deepregression:::subset_array(x$init_params$y, train_indcs),
+          validation_split = NULL,
+          validation_data = list(
+            val_data,
+            deepregression:::subset_array(x$init_params$y, val_indcs)
+          ),
+          callbacks = callbacks,
+          verbose = F,
+          view_metrics = FALSE,
+          class_weight = class_weights,
+          epochs = 50,
+          batch_size = 32
+        )
+      )
 
-    # assign hyperparameters
-    ellipsis <- x$init_params$ellipsis
-    ellipsis$optimizer$learning_rate$assign(learning_rate)
-    args <- append(args, ellipsis)
+      # assign hyperparameters
+      ellipsis <- x$init_params$ellipsis
+      ellipsis$optimizer$learning_rate$assign(learning_rate)
+      args <- append(args, ellipsis)
 
-    # fit model with args
-    ret <- do.call(x$fit_fun, args)
-    predictions <- x %>% predict(test_data)
-    colnames(predictions) <-
-      c("other", "BM" ,   "HFA"   , "HNA"  , "HNFA",  "NEA"  , "SEA")
-    predicted_classes <- factor(colnames(predictions)[max.col(predictions)], levels(df$value))
-    cm <- confusionMatrix(predicted_classes, df$value[test_indcs])
-    this_mod$set_weights(og_weights)
-    list(ret, predictions, cm)
+      # fit model with args
+      ret <- do.call(x$fit_fun, args)
+      predictions <- x %>% predict(test_data)
+      colnames(predictions) <-
+        c("other", "BM" ,   "HFA"   , "HNA"  , "HNFA",  "NEA"  , "SEA")
+      predicted_classes <-
+        factor(colnames(predictions)[max.col(predictions)], levels(df$value))
+      cm <- confusionMatrix(predicted_classes, df$value[test_indcs])
+      this_mod$set_weights(og_weights)
+      list(ret, predictions, cm)
 
-  })
-  # list of fit-history and predictions
-  return(fitted)
-}
+    })
+    # list of fit-history and predictions
+    return(fitted)
+  }
 
 ################################################ Status: Tested and done
 evaluate_splits_rep_ho <- function(results) {
-  fit_hists <- lapply(results, function(result) result[[1]])
-  predictions <- lapply(results, function(result) result[[2]])
-  cms <- lapply(results, function(result) result[[3]])
+  fit_hists <- lapply(results, function(result)
+    result[[1]])
+  predictions <- lapply(results, function(result)
+    result[[2]])
+  cms <- lapply(results, function(result)
+    result[[3]])
 
-  avg_cm_table <- Reduce('+', lapply(cms, function(cm) replace_na(cm$table))) / length(cms)
-  avg_cm_by_class <- Reduce('+', lapply(cms, function(cm) replace_na(cm$byClass))) / length(cms)
-  avg_mf1 <- mean(Reduce('+', lapply(cms, function(cm) replace_na(cm$byClass)[,"F1"])) / length(cms))
-  avg_bal_acc <- mean(Reduce('+', lapply(cms, function(cm) replace_na(cm$byClass)[,"Recall"])) / length(cms))
+  avg_cm_table <-
+    Reduce('+', lapply(cms, function(cm)
+      replace_na(cm$table))) / length(cms)
+  avg_cm_by_class <-
+    Reduce('+', lapply(cms, function(cm)
+      replace_na(cm$byClass))) / length(cms)
+  avg_mf1 <-
+    mean(Reduce('+', lapply(cms, function(cm)
+      replace_na(cm$byClass)[, "F1"])) / length(cms))
+  avg_bal_acc <-
+    mean(Reduce('+', lapply(cms, function(cm)
+      replace_na(cm$byClass)[, "Recall"])) / length(cms))
 
   #avg_map <- sum(avg_cm_by_class[,"Precision"]) / 7
   #avg_mf1 <- 2*((avg_map * avg_mar)/(avg_map + avg_mar))
@@ -211,47 +235,80 @@ evaluate_splits_rep_ho <- function(results) {
 # splits: list of train - val - test indices
 # df: dataframe containing test values
 # RETURN: list of outer rsmp. results
-nested_rsmp_final <- function(x, splits, tuning_archive, df, callbacks, class_weights){
-  og_weights <- x$model$get_weights()
-  x_train <- deepregression:::prepare_data(
-    x$init_params$parsed_formulas_content,
-    gamdata = x$init_params$gamdata$data_trafos
-  )
+nested_rsmp_final <-
+  function(x,
+           splits,
+           tuning_archive,
+           df,
+           callbacks,
+           class_weights) {
+    og_weights <- x$model$get_weights()
+    x_train <- deepregression:::prepare_data(
+      x$init_params$parsed_formulas_content,
+      gamdata = x$init_params$gamdata$data_trafos
+    )
 
-  splits_outer <- splits[[1]]
-  results <- vector(mode = "list", length = length(splits_outer))
+    splits_outer <- splits[[1]]
+    results <- vector(mode = "list", length = length(splits_outer))
+    str(results)
 
-  for(outer in seq_along(splits_outer)){
-    print(paste(outer, "outer"))
-    splits_inner <- splits[[2]][[outer]]
+    for (outer in seq_along(splits_outer)) {
+      print(paste(outer, "outer"))
+      splits_inner <- splits[[2]][[outer]]
 
-    # do HP-tuning using inner splits
-    for (hps in 1:nrow(tuning_archive)) {
-      print(paste(hps, " tuning"))
-      # do rep hop for inner resmp. procedure
-      results_hps <- rep_ho(x, og_weights, callbacks, splits_inner, x_train,
-                            tuning_archive[hps, "learning_rate"],
-                            tuning_archive[hps, "dropout_rate"],
-                            df, class_weights)
-      #str(results_hps)
-      eval_res <- evaluate_splits_rep_ho(results_hps)
-      #print(eval_res)
-      tuning_archive[hps, 4:5] <- eval_res
+      # do HP-tuning using inner splits
+      for (hps in 1:nrow(tuning_archive)) {
+        print(paste(hps, " tuning"))
+        # do rep hop for inner resmp. procedure
+        results_hps <-
+          rep_ho(
+            x,
+            og_weights,
+            callbacks,
+            splits_inner,
+            x_train,
+            tuning_archive[hps, "learning_rate"],
+            tuning_archive[hps, "dropout_rate"],
+            df,
+            class_weights
+          )
+        #str(results_hps)
+        eval_res <- evaluate_splits_rep_ho(results_hps)
+        #print(eval_res)
+        tuning_archive[hps, 4:5] <- eval_res
+      }
     }
     print(tuning_archive)
     # select best hp combination
-    learning_rate <- tuning_archive$learning_rate[which.max(tuning_archive$avg_mf1)]
-    drop_out <- tuning_archive$dropout_rate[which.max(tuning_archive$avg_mf1)]
+    learning_rate <-
+      tuning_archive$learning_rate[which.max(tuning_archive$avg_mf1)]
+    drop_out <-
+      tuning_archive$dropout_rate[which.max(tuning_archive$avg_mf1)]
     print(learning_rate)
     print(drop_out)
+
+    # #tmp drop_out
+    # drop_out = 0.2
+    # learning_rate = 0.001
+    # print("Splits")
+    # print(splits_outer[[outer]])
     # do rep ho for outer split and append result
-    results[[outer]] <- rep_ho(x, og_weights, callbacks, splits_outer[[outer]], x_train,
-                               learning_rate,
-                               drop_out,
-                               df, class_weights)
+
+    results_outer <-
+      rep_ho(
+        x,
+        og_weights,
+        callbacks,
+        splits_outer,
+        x_train,
+        learning_rate,
+        drop_out,
+        df,
+        class_weights
+      )
+    #print(results[[outer]])
+    results_outer
   }
-  results
-}
 
 
 
@@ -287,4 +344,3 @@ nested_rsmp_final <- function(x, splits, tuning_archive, df, callbacks, class_we
 # }
 #
 # nested_rspm(x, og_weights, callbacks, splits, x_train, tuning_archive, df)
-
