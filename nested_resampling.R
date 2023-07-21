@@ -89,7 +89,7 @@ replace_na <- function(x) {
 # x_train: prepared data
 # learning_rate: hyp. for optimizer
 # df: dataframe containing test values
-# RETURN: list of lists (fit_history and confusion matrix per split)
+# RETURN: (fit_history, list of is-eval, list of oos-eval)
 rep_ho <-
   function(x,
            og_weights,
@@ -97,9 +97,9 @@ rep_ho <-
            splits,
            x_train,
            learning_rate,
-           dropout_rate,
+           batch_size,
            df,
-           class_weights) {
+           class_weights, curr_length_existing, lags_existing) {
     fitted <- lapply(splits, function(split) {
       print("rep_ho")
       this_mod <- x$model
@@ -133,7 +133,7 @@ rep_ho <-
           view_metrics = FALSE,
           class_weight = class_weights,
           epochs = 50,
-          batch_size = 32
+          batch_size = batch_size
         )
       )
 
@@ -150,22 +150,60 @@ rep_ho <-
       predicted_classes <-
         factor(colnames(predictions)[max.col(predictions)], levels(df$value))
       cm <- confusionMatrix(predicted_classes, df$value[test_indcs])
+      list_pred_is <- list(predictions, cm, predicted_classes)
+      if (curr_length_existing | lags_existing){
+        list_pred_oos <- create_oos_forecast(predictions, predicted_classes, x, test_indcs, test_data, curr_length_existing, lags_existing, df)
+        results <- list(ret, list_pred_is, list_pred_oos)
+      }
+      else {
+        results <- list(ret, list_pred_is)
+      }
       this_mod$set_weights(og_weights)
-      list(ret, predictions, cm)
-
+      results
     })
     # list of fit-history and predictions
     return(fitted)
   }
 
+
+create_oos_forecast <- function(predictions, predicted_classes, x, test_indcs, test_data, curr_length_existing, lags_existing, df){
+  predictions_oos <- predictions
+  predicted_classes_oos <- predicted_classes
+  for (row in 1:nrow(predictions_oos)) {
+    dp <- lapply(test_data, function(x) deepregression:::subset_array(x, row))
+    predictions_oos[row, ] <- x %>% predict(dp)
+    colnames(predictions_oos) <-
+      c("other", "BM" ,   "HFA"   , "HNA"  , "HNFA",  "NEA"  , "SEA")
+    predicted_class_oos <- names(which.max(predictions_oos[row, ]))
+    predicted_classes_oos[row] <- predicted_class_oos
+    if (row > 1 & curr_length_existing & ((1 + row) <= nrow(predictions_oos))){
+      if(predicted_class_oos == predicted_classes_oos[row-1]){
+        test_data$curr_length[row+1] <- test_data$curr_length[[row]] + 1
+      }
+      else {
+        test_data$curr_length[row+1] <- 1
+      }
+    }
+    if (lags_existing) {
+      for (lag in 1:6) {
+        if (lag + row <= nrow(predictions_oos)) {
+          test_data[paste0("lag_", lag)][[1]][row + lag] <-as.factor(predicted_class_oos)
+        }
+      }
+    }
+  }
+  cm <- confusionMatrix(predicted_classes_oos, df$value[test_indcs])
+  list(predictions_oos, cm, predicted_classes_oos)
+}
+
 ################################################ Status: Tested and done
-evaluate_splits_rep_ho <- function(results) {
-  fit_hists <- lapply(results, function(result)
-    result[[1]])
-  predictions <- lapply(results, function(result)
-    result[[2]])
+evaluate_splits_rep_ho <- function(results, pos) {
+  # fit_hists <- lapply(results, function(result)
+  #   result[[1]])
+  # predictions <- lapply(results, function(result)
+  #   result[[2]])
   cms <- lapply(results, function(result)
-    result[[3]])
+    result[[pos]][[2]])
 
   avg_cm_table <-
     Reduce('+', lapply(cms, function(cm)
@@ -234,14 +272,14 @@ evaluate_splits_rep_ho <- function(results) {
 # callbacks: list of callbacks used for fitting
 # splits: list of train - val - test indices
 # df: dataframe containing test values
-# RETURN: list of outer rsmp. results
+# RETURN: list of outer rsmp. results (fit_history, list of is-eval, list of oos-eval)
 nested_rsmp_final <-
   function(x,
            splits,
            tuning_archive,
            df,
            callbacks,
-           class_weights) {
+           class_weights, curr_length_existing, lags_existing) {
     og_weights <- x$model$get_weights()
     x_train <- deepregression:::prepare_data(
       x$init_params$parsed_formulas_content,
@@ -253,39 +291,39 @@ nested_rsmp_final <-
     str(results)
 
     for (outer in seq_along(splits_outer)) {
-      print(paste(outer, "outer"))
-      splits_inner <- splits[[2]][[outer]]
+       print(paste(outer, "outer"))
+       splits_inner <- splits[[2]][[outer]]
 
-      # do HP-tuning using inner splits
-      for (hps in 1:nrow(tuning_archive)) {
-        print(paste(hps, " tuning"))
-        # do rep hop for inner resmp. procedure
-        results_hps <-
-          rep_ho(
-            x,
-            og_weights,
-            callbacks,
-            splits_inner,
-            x_train,
-            tuning_archive[hps, "learning_rate"],
-            tuning_archive[hps, "dropout_rate"],
-            df,
-            class_weights
-          )
-        #str(results_hps)
-        eval_res <- evaluate_splits_rep_ho(results_hps)
-        #print(eval_res)
-        tuning_archive[hps, 4:5] <- eval_res
-      }
-    }
-    print(tuning_archive)
-    # select best hp combination
-    learning_rate <-
-      tuning_archive$learning_rate[which.max(tuning_archive$avg_mf1)]
-    drop_out <-
-      tuning_archive$dropout_rate[which.max(tuning_archive$avg_mf1)]
-    print(learning_rate)
-    print(drop_out)
+       # do HP-tuning using inner splits
+       for (hps in 1:nrow(tuning_archive)) {
+         print(paste(hps, " tuning"))
+         # do rep hop for inner resmp. procedure
+         results_hps <-
+           rep_ho(
+             x,
+             og_weights,
+             callbacks,
+             splits_inner,
+             x_train,
+             tuning_archive[hps, "learning_rate"],
+             tuning_archive[hps, "batch_size"],
+             df,
+             class_weights,F, F
+           )
+         #str(results_hps)
+         eval_res <- evaluate_splits_rep_ho(results_hps, 2)
+         #print(eval_res)
+         tuning_archive[hps, 4:5] <- eval_res
+       }
+     }
+     print(tuning_archive)
+     # select best hp combination
+     learning_rate <-
+       tuning_archive$learning_rate[which.max(tuning_archive$avg_mf1)]
+     batch_size <-
+       tuning_archive$batch_size[which.max(tuning_archive$avg_mf1)]
+     print(learning_rate)
+     print(batch_size)
 
     # #tmp drop_out
     # drop_out = 0.2
@@ -302,9 +340,9 @@ nested_rsmp_final <-
         splits_outer,
         x_train,
         learning_rate,
-        drop_out,
+        batch_size,
         df,
-        class_weights
+        class_weights, curr_length_existing, lags_existing
       )
     #print(results[[outer]])
     results_outer
