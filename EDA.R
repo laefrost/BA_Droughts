@@ -1,7 +1,7 @@
 library(ggplot2)
 library(rcompanion)
 library(RColorBrewer)
-
+library(irr)
 source("preprocessing.R")
 # ------------------------------- Setting colors etc.
 colours_classes <- palette.colors(palette = "Okabe-Ito")[2:9]
@@ -61,7 +61,7 @@ ggplot(tmp_df_season, aes(fill=value, y=Mean, x= as.factor(season))) +
 # print(tmp_df, n = 100)
 
 
-# Cramers V
+# Cramer's V
 df_cramer <- df
 for (i in c(1:365)){
   varname <- paste0("lag_",i)
@@ -74,6 +74,20 @@ for (i in c(1:365)) {
 
 ggplot(data=cramers, aes(x=lag, y=cramersV)) +
   geom_bar(stat="identity")
+
+
+# kohen's kappa
+df_kohen <- df
+for (i in c(1:365)){
+  varname <- paste0("lag_",i)
+  df_kohen <- df_kohen %>% mutate("lag_{i}" := lag(value, i))
+}
+kohen <- data.frame("lag" = c(1:365), "kohensK" = c(1:365))
+for (i in c(1:365)) {
+  kohen[i, "kohensK"] <- kappam.light(table(df_kohen[, c("value", paste0("lag_", i))]))
+}
+
+ggplot(data=kohen, aes(x=lag, y=kohensK)) + geom_bar(stat="identity")
 
 # Rate evolution graph
 for (i in c(1:length(unique_classes))) {

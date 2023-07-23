@@ -108,11 +108,16 @@ build_cm_output <- function(avg_cms, model_name) {
 # TITLE: Creates dataframe combining overview metrics of models
 # cms: list of model results
 # RETURN: dataframe with combined combinations
-build_overview <- function(list_models_results, pos) {
-  overview_df <- data.frame("Avg.Macro F1-Score" = rep(0, length(list_models_results)),
+build_overview <- function(list_models_results, pos, formulas, model_names) {
+  overview_df <- data.frame("Model" = rep("0", length(list_models_results)),
+                            "Formula" = rep("0", length(list_models_results)),
+    "Avg.Macro F1-Score" = rep(0, length(list_models_results)),
                             "Avg.balanced Accuracy" = rep(0, length(list_models_results)))
   for (model in 1:length(list_models_results)){
-    overview_df[model, ] <- evaluate_splits_rep_ho(list_models_results[[model]], pos)
+    print(model)
+    print(formulas[[model]])
+    overview_df[model, ] <- c(model, formulas[[model]],
+                              evaluate_splits_rep_ho(list_models_results[[model]], pos))
   }
   overview_df
 }
@@ -122,7 +127,7 @@ build_overview <- function(list_models_results, pos) {
 # TITLE: Creates df for boxplots of predictions
 # preidctions: list
 # RETURN: dataframe with combined combinations
-build_box_df <- function(predictions, predicted_classes, pos, test_indices, df) {
+build_boxplot <- function(predictions, predicted_classes, pos, test_indices, df, plot_name) {
   # alle prediction und pc obejcte aus allen splits zusammen fügen
   df_predictions <- as.data.frame.matrix(rbind(predictions[[1]], predictions[[2]], predictions[[3]]))
   vec_pc <- c(predicted_classes[[1]], c(predicted_classes[[2]]), c(predicted_classes[[3]]))
@@ -132,67 +137,91 @@ build_box_df <- function(predictions, predicted_classes, pos, test_indices, df) 
   classes <- unique(df$value)
   df_boxplot <- data.frame()
   for (c in 1:length(classes)) {
-    class <- classes[c]
-    print(class)
+    class_c <- classes[c]
     df_class <- df_predictions
-    df_class <- df_class %>% mutate(curr_class = class, type = case_when(
-      tc == class & tc == pc ~ "TP",
-      tc == class & tc != pc ~ "FN",
-      tc != class & class == pc ~ "FP",
+    df_class <- df_class %>% mutate(curr_class = class_c, type = case_when(
+      tc == class_c & tc == pc ~ "True Positive",
+      tc == class_c & tc != pc ~ "False Negative",
+      tc != class_c & class_c == pc ~ "False Positive",
       .default = NA
-    )) %>% mutate(p_predicted = ) #%>% drop_na(type)
-    print(str(df_class))
-    df_class$p_predicted <- df_predictions[, pc]
-    df_class$p_true <- df_predictions[, tc]
-    df_class <- df_class %>% drop_na(type)
-    print("AAAAAAFTER")
-    print(str(df_class))
-    print(df_class)
+    ))  %>% mutate(probability = case_when(type == "False Positive" ~ .[[class_c]],
+                                                            type == "False Negative" ~  pmax(other, BM, HFA, HNA, HNFA, NEA, SEA),
+                                                            T ~ NA))
+    df_class <- df_class %>% drop_na(type) %>% drop_na(probability)
     df_boxplot = rbind(df_boxplot, df_class)
   }
+
+  boxplot <- ggplot(df_boxplot, aes(x = curr_class, y = probability, fill = curr_class)) +
+    geom_boxplot() +
+    scale_color_brewer(palette="Dark2") + facet_wrap(~type) +
+    theme(legend.position = "bottom") + guides(fill = guide_legend(nrow = 1, title = "Circulation pattern")) +
+    scale_x_discrete(name = "Circulation pattern") +
+    scale_y_continuous(name = "Probability of predicted class", breaks = seq(0, 1.0, by = 0.25)) +
+    coord_cartesian(ylim = c(0, 1))
+
+  ggsave(paste0(plot_name, ".png"), boxplot, width = 7, height = 5, dpi = 300, units = "in")
   df_boxplot
+
 }
 
-eval_pipe <- function(model_result, bool_forecast, model_name, splits){
+
+predictions <- get_result_element(mod_imgs_outer_res, 1, 2)
+pc_123 <- get_result_element(mod_imgs_outer_res, 3, 2)
+test_df <- build_boxplot(predictions, pc, 2, test_indcs_helper, df, "testplot")
+
+ggplot(test_df, aes(x = curr_class, y = probability, fill = curr_class)) +
+  geom_boxplot() +
+  scale_color_brewer(palette="Dark2") + facet_wrap(~type) +
+  theme(legend.position = "bottom") + guides(fill = guide_legend(nrow = 1, title = "Circulation pattern")) +
+  scale_x_discrete(name = "Circulation pattern") +
+  scale_y_continuous(name = "Probability", breaks = seq(0.0, 1.0, by = 0.25)) +
+  coord_cartesian(ylim = c(0, 1))
+
+
+eval_pipe <- function(model_result, bool_forecast, model_name, splits, df, test_indices){
   predictions <- get_result_element(model_result, 1, 2)
-  # create output for allg. cms
+  predicted_classes <- get_result_element(model_result, 3, 2)
   cms_pred <- get_avg_cms(model_result, F, 2)
-  build_cm_output(cms_pred, paste0(model_name, "_pred"))
-  # create output for forecast cms if existing
-  # create transition output
+  build_cm_output(cms_pred, paste0(model_name, "_cm_pred"))
   cms_transitions <- inspect_transitions(model_result, splits, F, 2)
   cms_transitions <- cms_transitions[c(1,2)]
-  build_cm_output(cms_transitions, paste0(model_name, "_transition_pred"))
+  build_cm_output(cms_transitions, paste0(model_name, "_cm_transition_pred"))
+  build_boxplot(predictions, predicted_classes, 2, test_indices, df, paste0(model_name, "_boxplot_pred"))
 
   if (bool_forecast) {
+    predictions_fc <- get_result_element(model_result, 1, 3)
+    predicted_classes_fc <- get_result_element(model_result, 3, 3)
     cms_forecast <- get_avg_cms(model_result, F, 3)
-    build_cm_output(cms_forecast, paste0(model_name, "_forecast"))
+    build_cm_output(cms_forecast, paste0(model_name, "_cm_forecast"))
     cms_transitions_forecast <- inspect_transitions(model_result, splits, F, 3)
     cms_transitions_forecast <- cms_transitions_forecast[c(1,2)]
-    build_cm_output(cms_transitions_forecast, paste0(model_name, "_transition_forecast"))
+    build_cm_output(cms_transitions_forecast, paste0(model_name, "_cm_transition_forecast"))
+    build_boxplot(predictions_fc, predicted_classes_fc, 3, test_indices, df, paste0(model_name, "_boxplot_forecast"))
   }
-
   # create One vs. ALL ROC's and save them in one plot ---> ToDo: write function
   # create Boxplot: Wirte function
 }
+
+
+
 
 # create_ROCs <- function(model_result, pos){
 #   predictions <- get_result_element(model_result, 1, 2)
 #   predictions <- get_result_element(model_result, 1, 2)
 # }
 
-
-
-str(mod_imgs_lags_length_outer_res)
-p<-ggplot(df_boxplot_test, aes(x=tc, y=rel_predict, fill=type)) +
-  geom_boxplot(position=position_dodge(1))
-p
-
-# bsp fpür tc = other
-df_boxplot_other <- df_boxplot_test %>% filter(curr_class == "other" , type == "FN") %>% select(curr_class, p_predicted, p_true, pc, tc)
-
-ggplot(df_boxplot_other, aes(x=type, y=rel_predict, fill=pc)) +
-  geom_boxplot(position=position_dodge(1))
+#
+#
+# str(mod_imgs_lags_length_outer_res)
+# p<-ggplot(df_boxplot_test, aes(x=tc, y=rel_predict, fill=type)) +
+#   geom_boxplot(position=position_dodge(1))
+# p
+#
+# # bsp fpür tc = other
+# df_boxplot_other <- df_boxplot_test %>% filter(curr_class == "other" , type == "FN") %>% select(curr_class, p_predicted, p_true, pc, tc)
+#
+# ggplot(df_boxplot_other, aes(x=type, y=rel_predict, fill=pc)) +
+#   geom_boxplot(position=position_dodge(1))
 
 
 # c_weigths <- c(unlist(class_weights), NA)
@@ -232,3 +261,4 @@ ggplot(df_boxplot_other, aes(x=type, y=rel_predict, fill=pc)) +
 #   #scale_fill_discrete(breaks=c("train", "validation", "test"), values=group.colors)
 # group.colors <- c(train = "chartreuse4", validation = "goldenrod2", test ="darkmagenta")
 ### 800 x 300
+?get
