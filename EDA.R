@@ -11,8 +11,10 @@ palette_gwls <- brewer.pal(n = 7, name = "Dark2")
 # ------------------------------- Plots of circulation pattern distribution
 # Histogram for absolute frequency
 ggplot(df, aes(x=value)) +
-  geom_histogram() +
-  scale_fill_brewer(palette=palette_gwls, name = "Circulation patterns")
+  geom_bar(fill = palette_gwls) +
+  scale_x_discrete(name = "Circulation pattern") +
+  scale_y_continuous(name = "Absolute frequency", breaks = seq(2000, 32000, by = 5000))
+
 
 # Bar plot for distribution over time
 eda_df_year <- df %>% group_by(year, value) %>% count()
@@ -70,53 +72,15 @@ for (i in c(1:365)) {
   cramers[i, "cramersV"] <- cramerV(table(df_cramer[, c("value", paste0("lag_", i))]))
 }
 
-cramers
-
-
 ggplot(data=cramers, aes(x=lag, y=cramersV)) +
   geom_bar(stat="identity")
 
-
-
-
-
-
-
-
-
-
 # Rate evolution graph
-# create df for each cat
-# x = nmb of events bzw date,
-# y = value
-
 for (i in c(1:length(unique_classes))) {
   tmp_df = df[df$value == unique_classes[i], ]
   tmp_df$count = c(1:nrow(tmp_df))
   assign(paste0("df_", unique_classes[i]), tmp_df)
 }
-df_BM
-# rate evolution graph
-ggplot(data = df, aes(x = year, colour = viz_ordered_classes)) +
-  #geom_line(data = get(paste0(paste0("df_", unique_classes[1]))), aes(x = date, y = count), color = "green") +
-  #geom_point(data = get(paste0(paste0("df_", unique_classes[1]))), aes(x = date, y = count)) +
-  geom_line(data = get(paste0(paste0("df_", unique_classes[2]))), aes(x = date, y = count), color = I(palette_gwls[2])) +
-  geom_point(data = get(paste0(paste0("df_", unique_classes[2]))), aes(x = date, y = count), color = I(palette_gwls[2])) +
-  geom_line(data = get(paste0(paste0("df_", unique_classes[3]))), aes(x = date, y = count), color = I(palette_gwls[3])) +
-  geom_point(data = get(paste0(paste0("df_", unique_classes[3]))), aes(x = date, y = count), color = I(palette_gwls[3])) +
-  geom_line(data = get(paste0(paste0("df_", unique_classes[4]))), aes(x = date, y = count), color = I(palette_gwls[4])) +
-  geom_point(data = get(paste0(paste0("df_", unique_classes[4]))), aes(x = date, y = count), color = I(palette_gwls[4])) +
-  geom_line(data = get(paste0(paste0("df_", unique_classes[5]))), aes(x = date, y = count), color = I(palette_gwls[5])) +
-  geom_point(data = get(paste0(paste0("df_", unique_classes[5]))), aes(x = date, y = count), color = I(palette_gwls[5])) +
-  geom_line(data = get(paste0(paste0("df_", unique_classes[6]))), aes(x = date, y = count), color = I(palette_gwls[6])) +
-  geom_point(data = get(paste0(paste0("df_", unique_classes[6]))), aes(x = date, y = count), color = I(palette_gwls[6])) +
-  geom_line(data = get(paste0(paste0("df_", unique_classes[7]))), aes(x = date, y = count), color = I(palette_gwls[7])) +
-  geom_point(data = get(paste0(paste0("df_", unique_classes[7]))), aes(x = date, y = count), color = I(palette_gwls[7])) +
-  scale_x_date(name = "Year") + scale_y_discrete(name = "Culmulative frequency") +
-  scale_fill_manual(name="Circulation pattern",values=viz_ordered_classes) + scale_colour_manual(
-    values = c("darkred", "steelblue")
-  )
-
 
 ggplot(data = df, aes(x = as.Date(date))) +
   #geom_line(data = get(paste0(paste0("df_", unique_classes[1]))), aes(x = date, y = count), color = "green") +
@@ -136,5 +100,3 @@ ggplot(data = df, aes(x = as.Date(date))) +
   scale_x_date(name = "Year", breaks = seq(as.Date("1900-01-01"), as.Date("2010-12-31"), by="10 years"), date_labels = "%Y") + scale_y_discrete(name = "Culmulative frequency") +
   scale_colour_manual(name = "Circulation pattern", values = palette_gwls[2:7])
 
-
-df$date

@@ -22,10 +22,6 @@ df$day <- as.numeric(gsub("\\D", "", df$variable))
 df$day <-
   ifelse(df$day >= 10, as.character(df$day), paste(0, df$day, sep = ""))
 df$date <- ymd(paste(df$JAHRMONAT, df$day, sep = ""))
-# relevel gwl to "Other" as reference category
-#df$value <- relevel(df$value, ref = "other")
-
-
 
 # create additional covariates
 df <- df %>% arrange(date) %>% drop_na(date) %>%
@@ -49,64 +45,21 @@ df <- df %>% arrange(date) %>% drop_na(date) %>%
     lag_4 = relevel(lag(value, n = 4), ref = "other"),
     lag_5 = relevel(lag(value, n = 5), ref = "other"),
     lag_6 = relevel(lag(value, n = 6), ref = "other"),
-    # lag_7 = lag(value, n = 7),
-    # lag_8 = lag(value, n = 8),
-    # lag_9 = lag(value, n = 9),
-    # lag_10 = lag(value, n = 10),
-    # lag_11 = lag(value, n = 11),
-    # lag_12 = lag(value, n = 12),
-    # lag_13 = lag(value, n = 13),
-    # lag_14 = lag(value, n = 14),
-    # lag_15 = lag(value, n = 15),
-    # lag_16 = lag(value, n = 16),
-    # lag_17 = lag(value, n = 17),
-    # lag_18 = lag(value, n = 18),
-    # lag_19 = lag(value, n = 19),
-    # lag_20 = lag(value, n = 20),
-    # lag_21 = lag(value, n = 21),
-    # lag_22 = lag(value, n = 22),
-    # lag_23 = lag(value, n = 23),
-    # lag_24 = lag(value, n = 24),
-    # lag_25 = lag(value, n = 25),
-    # lag_26 = lag(value, n = 26),
-    # lag_27 = lag(value, n = 27),
-    # lag_28 = lag(value, n = 28),
-    # lag_29 = lag(value, n = 29),
-    # lag_30 = lag(value, n = 30),
     date_numeric = as.numeric(date),
     day_year = lubridate::yday(date),
-    # value_num = as.numeric(as.factor(value)) - 1,
-    # lag_1_num = as.factor(as.numeric(as.factor(lag_1)) - 1),
-    # lag_2_num = as.factor(as.numeric(as.factor(lag_2)) - 1),
-    # lag_3_num = as.factor(as.numeric(as.factor(lag_3)) - 1),
   )
 
 # remove missing day
 df <- df[df$date != "1942-11-30", ]
-
-
 # create shifted vals
 df$group_id <- cumsum(df$value != df$lag_1  | is.na(df$lag_1 ))
-#df_length <- df %>% select(group_id, value) %>% group_by(group_id, value) %>% count()
+df_transitions <- df %>% group_by(group_id) %>% mutate(transition = c(T, rep_len(F, length.out = n()-1)))
 df_length <- df %>% group_by(group_id) %>% mutate(curr_length = 1:n())
 df$curr_length <- df_length$curr_length
-
-#str(tmp_df)
-#head(tmp_df)
-#tmp_df <- tmp_df %>% mutate(shift_1 = lag(value, n = 1),
-#                            shift_freq_1 = lag(freq, n = 1),
-#                            shift_2 = lag(value, n = 2),
-#                            shift_freq_2 = lag(freq, n = 2)) %>% select(-c(value))
-#df <- merge(df, tmp_df, by.x = c("group_id"), by.y = c("group_id"),  all.x = TRUE)
-
-#head(df[, c("value", "lag_1", "shift_1", "shift_2", "shift_freq_2", "shift_freq_1")], n = 30)
-#head(tmp_df)
-# remove NA values for lags
-#df_combined <- df[-(1:3), , drop = FALSE]
+df <- df %>% mutate(curr_length = lag(curr_length, 1))
+df$transition <- df_transitions$transition
+df_og_length <- df
 df <- df[-(1:6), , drop = FALSE]
-str(df)
-head(df)
-#str(df_combined)
 
 # ------------------------------ Load and rescale images
 imgs <- readRDS("mslp_z500.rds")
@@ -116,24 +69,8 @@ imgs_train <- imgs_train/255
 # mslp: mean sea level pressure
 # z500: Geopotential
 # Format: 40541 x 39 x 16 x 2 --> 2 wg. mslp und z500
-str(imgs_train)
-class(imgs_train)
-#imgs_train <- imgs_train[15:40541, 1:39, 1:16, 1:2]
-
 imgs_train_og <- imgs_train[1:40541, 1:39, 1:16, 1:2]
-#imgs_train_lag1 <- imgs_train[2:40541, 1:39, 1:16, 1:2]
-#imgs_train_lag2 <- imgs_train[3:40541, 1:39, 1:16, 1:2]
-#imgs_train_lag3 <- imgs_train[4:40541, 1:39, 1:16, 1:2]
 imgs_train <- imgs_train[7:40541, 1:39, 1:16, 1:2]
-#str(imgs_train_lag3)
-#imgs_train_combined <- array(numeric(), c(40538, 39, 16, 8))
-
-#imgs_train_combined[,,,1:2] <- imgs_train_og[4:40541, 1:39, 1:16, 1:2]
-#imgs_train_combined[,,,3:4] <- imgs_train_lag1[3:40540, 1:39, 1:16, 1:2]
-#imgs_train_combined[,,,5:6] <- imgs_train_lag2[2:40539, 1:39, 1:16, 1:2]
-#imgs_train_combined[,,,7:8] <- imgs_train_lag3[1:40538, 1:39, 1:16, 1:2]
-
-#einfach anders abschneiden
 
 # ------------------------------ create list obj. for modellig
 data <- list(
@@ -143,54 +80,21 @@ data <- list(
   month = df$month,
   day = df$day,
   year = df$year,
-  #season_num = df$season_num,
   season = df$season,
-  #shift_1 = df$shift_1,
-  #shift_2 = df$shift_2,
-  #shift_freq_1 = df$shift_freq_1,
-  #shift_freq_2 = df$shift_freq_2,
   lag_1 = df$lag_1,
   lag_2 = df$lag_2,
   lag_3 = df$lag_3,
   lag_4 = df$lag_4,
   lag_5 = df$lag_5,
   lag_6 = df$lag_6,
-  # lag_7 = df$lag_7,
-  # lag_8 = df$lag_8,
-  # lag_9 = df$lag_9,
-  # lag_10 = df$lag_10,
-  # lag_1_num = df$lag_1_num,
-  # lag_2_num = df$lag_2_num,
-  # lag_3_num = df$lag_3_num,
   gwl = df$value,
   curr_length = df$curr_length
 )
-str(data)
 
-# data_combined <- list(
-#   date = df_combined$date,
-#   date_numeric = df_combined$date_numeric,
-#   month = df_combined$month,
-#   day = df_combined$day,
-#   year = df_combined$year,
-#   season_num = df_combined$season_num,
-#   gwl = df_combined$value,
-#   season = df_combined$season,
-#   image_extended = imgs_train_combined
-# )
+
+
 # ------------------------------ create specific format for target var
 y <- to_categorical(as.numeric(as.factor(data$gwl))-1)
-#y_combined <- to_categorical(as.numeric(as.factor(data_combined$gwl))-1)
-# ------------------------------ Create Train/Test-Data for CV
-indcs_og <- c(1:length(data$date))
-indcs_ts <- createTimeSlices(indcs_og, initialWindow = 20*365, horizon = 4*365, skip = 24*365, fixedWindow = T)
-str(indcs_ts)
-indcs_final <- list(c(1:4))
-# create list for deepregression cv indices
-for(i in c(1:4)){
-  indcs_final[[i]] <- list(indcs_ts$train[[i]], indcs_ts$test[[i]])
-  print(round(table(data$gwl[indcs_ts$train[[i]]])/length(data$gwl[indcs_ts$train[[i]]]), 4))
-}
 
 # ------------------------------- Create class weights via inverse class frequency
 unique_classes <- levels(data$gwl)
@@ -208,4 +112,3 @@ for (i in seq_along(unique_classes)) {
 
 }
 names(class_weights) <- c(0:6)
-levels(data$gwl)
