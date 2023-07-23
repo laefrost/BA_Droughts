@@ -176,40 +176,11 @@ eval_pipe <- function(model_result, bool_forecast, model_name, splits){
   # create Boxplot: Wirte function
 }
 
+# create_ROCs <- function(model_result, pos){
+#   predictions <- get_result_element(model_result, 1, 2)
+#   predictions <- get_result_element(model_result, 1, 2)
+# }
 
-
-
-
-mod_imgs_outer_res <- readRDS("mod_imgs_outer_res")
-mod_imgs_lags_length_outer_res <- readRDS("mod_imgs_lags_length_outer_res")
-splits_helper <- create_splits_nested(df)
-test_indcs_helper <- lapply(splits_helper[[1]], function(split) split[[3]])
-
-df[test_indcs_helper[[1]],]
-
-test_indcs_helper[[1]]
-
-pred_test <- get_result_element(mod_imgs_outer_res, 1, 2)
-pc_test <- get_result_element(mod_imgs_outer_res, 3, 2)
-
-cms_wi <- get_avg_cms(mod_imgs_lags_length_outer_res, F, 2)
-build_cm_output(cms_wi, "imgs_lags_length_wi")
-
-cms_transitions_forecast <- inspect_transitions(mod_imgs_lags_length_outer_res, splits_helper, F, 3)
-build_cm_output(cms_transitions_forecast[c(1:2)], "test")
-
-
-
-
-
-
-
-df_boxplot_test <- build_box_df(pred_test, pc_test, 2, test_indcs_helper, df)
-
-test_indcs_helper[[1]]
-get_avg_cms(mod_imgs_lags_length_outer_res, F, 3)
-
-get_result_element(mod_imgs_lags_length_outer_res, 2, 2)
 
 
 str(mod_imgs_lags_length_outer_res)
@@ -260,3 +231,4 @@ ggplot(df_boxplot_other, aes(x=type, y=rel_predict, fill=pc)) +
 #   theme(legend.position="bottom") #+
 #   #scale_fill_discrete(breaks=c("train", "validation", "test"), values=group.colors)
 # group.colors <- c(train = "chartreuse4", validation = "goldenrod2", test ="darkmagenta")
+### 800 x 300

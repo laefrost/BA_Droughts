@@ -99,7 +99,7 @@ rep_ho <-
            learning_rate,
            batch_size,
            df,
-           class_weights, curr_length_existing, lags_existing) {
+           class_weights, curr_length_existing, lags_existing, nmb_of_lags) {
     fitted <- lapply(splits, function(split) {
       print("rep_ho")
       this_mod <- x$model
@@ -152,7 +152,7 @@ rep_ho <-
       cm <- confusionMatrix(predicted_classes, df$value[test_indcs])
       list_pred_is <- list(predictions, cm, predicted_classes)
       if (curr_length_existing | lags_existing){
-        list_pred_oos <- create_oos_forecast(predictions, predicted_classes, x, test_indcs, test_data, curr_length_existing, lags_existing, df)
+        list_pred_oos <- create_oos_forecast(predictions, predicted_classes, x, test_indcs, test_data, curr_length_existing, lags_existing, df, nmb_of_lags)
         results <- list(ret, list_pred_is, list_pred_oos)
       }
       else {
@@ -166,7 +166,7 @@ rep_ho <-
   }
 
 
-create_oos_forecast <- function(predictions, predicted_classes, x, test_indcs, test_data, curr_length_existing, lags_existing, df){
+create_oos_forecast <- function(predictions, predicted_classes, x, test_indcs, test_data, curr_length_existing, lags_existing, df, nmb_of_lags){
   predictions_oos <- predictions
   predicted_classes_oos <- predicted_classes
   for (row in 1:nrow(predictions_oos)) {
@@ -185,7 +185,7 @@ create_oos_forecast <- function(predictions, predicted_classes, x, test_indcs, t
       }
     }
     if (lags_existing) {
-      for (lag in 1:6) {
+      for (lag in 1:nmb_of_lags) {
         if (lag + row <= nrow(predictions_oos)) {
           test_data[paste0("lag_", lag)][[1]][row + lag] <-as.factor(predicted_class_oos)
         }
@@ -279,7 +279,7 @@ nested_rsmp_final <-
            tuning_archive,
            df,
            callbacks,
-           class_weights, curr_length_existing, lags_existing) {
+           class_weights, curr_length_existing, lags_existing, nmb_of_lags) {
     og_weights <- x$model$get_weights()
     x_train <- deepregression:::prepare_data(
       x$init_params$parsed_formulas_content,
@@ -308,7 +308,7 @@ nested_rsmp_final <-
              tuning_archive[hps, "learning_rate"],
              tuning_archive[hps, "batch_size"],
              df,
-             class_weights,F, F
+             class_weights,F, F, nmb_of_lags
            )
          #str(results_hps)
          eval_res <- evaluate_splits_rep_ho(results_hps, 2)
@@ -342,7 +342,7 @@ nested_rsmp_final <-
         learning_rate,
         batch_size,
         df,
-        class_weights, curr_length_existing, lags_existing
+        class_weights, curr_length_existing, lags_existing, nmb_of_lags
       )
     #print(results[[outer]])
     results_outer

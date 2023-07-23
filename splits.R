@@ -18,12 +18,12 @@ create_splits <- function(start_year, end_year, length_test, length_val, df_indc
 create_splits_nested <- function(df_indcs){
   splits_outer <- create_splits(1990, 2010, 10, 10, df_indcs, 10)
   splits_inner <- vector(mode = "list", length = length(splits_outer))
-  for (outer in 1:length(splits_outer)) {
-    end_year_inner <- df[splits_outer[[outer]][[1]][length(splits_outer[[outer]][[1]])], "year"]
-    print(end_year_inner)
-    splits_tmp <- create_splits(end_year_inner-10, end_year_inner, 5, 5, df_indcs, 5)
-    splits_inner[[outer]] <- splits_tmp
-  }
+   for (outer in 1:length(splits_outer)) {
+     end_year_inner <- df[splits_outer[[outer]][[1]][length(splits_outer[[outer]][[1]])], "year"]
+     print(end_year_inner)
+     splits_tmp <- create_splits(end_year_inner-10, end_year_inner, 5, 5, df_indcs, 5)
+     splits_inner[[outer]] <- splits_tmp
+   }
   str(splits_outer)
   list(splits_outer, splits_inner)
 }
