@@ -4,7 +4,6 @@ library(mgcv)
 library(reshape2)
 library(lubridate)
 library(nnet)
-library(deepregression)
 library(tidyr)
 library(longCatEDA)
 library(lattice)
@@ -15,7 +14,7 @@ df_og <- read.csv2("GWL_1900-2010.csv", sep = ";")
 rel_gwl <- c("BM", "HFA", "HNA", "HNFA", "NEA", "SEA")
 df <- df_og
 
-# change format from long  to wide
+### change format from long  to wide
 df <- melt(df, id = "JAHRMONAT")
 # create date column
 df$day <- as.numeric(gsub("\\D", "", df$variable))
@@ -23,10 +22,10 @@ df$day <-
   ifelse(df$day >= 10, as.character(df$day), paste(0, df$day, sep = ""))
 df$date <- ymd(paste(df$JAHRMONAT, df$day, sep = ""))
 
-# create additional covariates
+### create additional covariates
 df <- df %>% arrange(date) %>% drop_na(date) %>%
   mutate(
-    month = as.numeric(format(date, "%m")),
+    month = as.factor(format(date, "%m")),
     year = as.numeric(format(date, "%Y")),
     value_og = value,
     value = relevel(as.factor(ifelse(value %in% rel_gwl, value, "other")), ref = "other"),
@@ -49,17 +48,26 @@ df <- df %>% arrange(date) %>% drop_na(date) %>%
     day_year = lubridate::yday(date),
   )
 
-# remove missing day
+### remove missing day
 df <- df[df$date != "1942-11-30", ]
-# create shifted vals
+
+### create shifted vals
 df$group_id <- cumsum(df$value != df$lag_1  | is.na(df$lag_1 ))
-df_transitions <- df %>% group_by(group_id) %>% mutate(transition = c(T, rep_len(F, length.out = n()-1)))
+df_transitions_first <- df %>% group_by(group_id) %>% mutate(transition_first = c(T, rep_len(F, length.out = n()-1)))
+df_transitions_last <- df %>% group_by(group_id) %>% mutate(transition_last = c(rep_len(F, length.out = n()-1), T))
 df_length <- df %>% group_by(group_id) %>% mutate(curr_length = 1:n())
 df$curr_length <- df_length$curr_length
 df <- df %>% mutate(curr_length = lag(curr_length, 1))
-df$transition <- df_transitions$transition
+df$transition_first <- df_transitions_first$transition_first
+df$transition_last <- df_transitions_last$transition_last
+df <- df %>% mutate(transition = case_when(
+  transition_first == T | transition_last == T ~ T,
+  T ~ F
+))
 df_og_length <- df
 df <- df[-(1:6), , drop = FALSE]
+df_old <- df
+df <- df[-c(nrow(df)), ,drop = FALSE]
 
 # ------------------------------ Load and rescale images
 imgs <- readRDS("mslp_z500.rds")
@@ -70,7 +78,25 @@ imgs_train <- imgs_train/255
 # z500: Geopotential
 # Format: 40541 x 39 x 16 x 2 --> 2 wg. mslp und z500
 imgs_train_og <- imgs_train[1:40541, 1:39, 1:16, 1:2]
-imgs_train <- imgs_train[7:40541, 1:39, 1:16, 1:2]
+imgs_train <- imgs_train[7:40540, 1:39, 1:16, 1:2]
+
+# ### create lagged images
+# imgs_lagged <- imgs_train_og
+# imgs_lagged <- imgs_train_og[6:40539, 1:39, 1:16, 1:2]
+# imgs_leaded <- imgs_train_og[8:40541, 1:39, 1:16, 1:2]
+#
+# imgs_train_combined <- array(numeric(), c(40534, 39, 16, 6))
+# imgs_train_combined[,,,1:2] <- imgs_train
+# imgs_train_combined[,,,3:4] <- imgs_lagged
+# imgs_train_combined[,,,5:6] <- imgs_leaded
+#
+# imgs_train_lagged <- array(numeric(), c(40534, 39, 16, 4))
+# imgs_train_lagged[,,,1:2] <- imgs_train
+# imgs_train_lagged[,,,3:4] <- imgs_lagged
+#
+# imgs_train_lead <- array(numeric(), c(40534, 39, 16, 4))
+# imgs_train_lead[,,,1:2] <- imgs_leaded
+# imgs_train_lead[,,,3:4] <- imgs_train
 
 # ------------------------------ create list obj. for modellig
 data <- list(
@@ -89,8 +115,12 @@ data <- list(
   lag_6 = df$lag_6,
   gwl = df$value,
   curr_length = df$curr_length
+  #image_lagged = imgs_lagged,
+  #image_lead = imgs_leaded,
+  #image_combined_lagged_lead = imgs_train_combined,
+  #image_combined_lagged = imgs_train_lagged,
+  #image_combined_lead = imgs_train_lead
 )
-
 
 
 # ------------------------------ create specific format for target var

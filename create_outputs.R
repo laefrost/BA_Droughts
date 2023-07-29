@@ -60,8 +60,10 @@ build_cm_output <- function(cms) {
 # RETURN: dataframe with combined combinations
 build_overview <- function(list_models_results, pos) {
   overview_df <- data.frame("Avg.Macro F1-Score" = rep(0, length(list_models_results)),
-                            "Avg.balanced Accuracy" = rep(0, length(list_models_results)))
+                            "Macro avg. Recall" = rep(0, length(list_models_results)),
+                            "Macro avg. Precision" = rep(0, length(list_models_results)))
   for (model in 1:length(list_models_results)){
+    if(length(list_models_results[[model]][[1]]))
     overview_df[model, ] <- evaluate_splits_rep_ho(list_models_results[[model]], pos)
   }
   overview_df
@@ -79,34 +81,31 @@ kable(cm_output, booktabs = TRUE, "latex") %>% add_header_above(c("Labels" = 10)
 # TITLE: Creates boxplots of predictions
 # preidctions: list
 # RETURN: dataframe with combined combinations
-build_box_df <- function(precdictions, predicted_classes, pos, test_indices, df) {
+build_box_df <- function(predictions, predicted_classes, pos, test_indices, df) {
   # alle prediction und pc obejcte aus allen splits zusammen fügen
   df_predictions <- rbind(predictions[[1]], predictions[[2]], predictions[[3]])
-  vec_pc <- c(predicted_classes[[1]], c(predicted_classes[[1]]), c(predicted_classes[[3]]))
-  vec_tc <- c(df$value[test_indices[[1]], ], df$value[test_indices[[2]], ], df$value[test_indices[[3]], ])
-  df_predictions <- df_predictions %>% mutate(pc = vec_pc, tc = vec_tc)
+  vec_pc <- c(predicted_classes[[1]], c(predicted_classes[[2]]), c(predicted_classes[[3]]))
+  vec_tc <- c(df$value[test_indices[[1]]], df$value[test_indices[[2]]], df$value[test_indices[[3]]])
+  df_predictions <- as.data.frame.matrix(df_predictions) %>% mutate(pc = vec_pc, tc = vec_tc)
   # pro Klasse dann df machen und die auch einfach aneinander batschen
   classes <- unique(df$value)
   df_boxplot <- data.frame()
   for (c in 1:length(classes)) {
     class <- classes[c]
+    print(class)
     df_class <- df_predictions
-    print("Befoooooore")
-    print(str(df_class))
-    print(df_class, n = 50)
-    # create TP
-    # create FP
-    # create FN
+    df_class$class <- class
     df_class <- df_class %>% mutate(type = case_when(
       tc == class & tc == pc ~ "TP",
       tc == class & tc != pc ~ "FN",
-      tc != class & tc == pc ~ "FP",
+      tc != class & class == pc ~ "FP",
       .default = NA
     )) %>% drop_na(type)
     print("AAAAAAFTER")
-    print(str(df_class))
-    print(df_class, n = 50)
+    #print(str(df_class))
+    print(df_class)
     df_boxplot = rbind(df_boxplot, df_class)
   }
   df_boxplot
 }
+
