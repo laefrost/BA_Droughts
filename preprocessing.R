@@ -1,3 +1,6 @@
+### Info: Does data preprocessing, creates both y and data for deepregression, creates class weigths
+### Called from: models.R, models_evaluation.R, EDA.R
+
 library(dplyr)
 library(ggplot2)
 library(mgcv)
@@ -8,6 +11,7 @@ library(tidyr)
 library(longCatEDA)
 library(lattice)
 library(caret)
+library(deepregression)
 
 # ------------------------------ Load and convert data into time series format (df)
 df_og <- read.csv2("GWL_1900-2010.csv", sep = ";")
@@ -80,23 +84,11 @@ imgs_train <- imgs_train/255
 imgs_train_og <- imgs_train[1:40541, 1:39, 1:16, 1:2]
 imgs_train <- imgs_train[7:40540, 1:39, 1:16, 1:2]
 
-# ### create lagged images
-# imgs_lagged <- imgs_train_og
-# imgs_lagged <- imgs_train_og[6:40539, 1:39, 1:16, 1:2]
-# imgs_leaded <- imgs_train_og[8:40541, 1:39, 1:16, 1:2]
-#
-# imgs_train_combined <- array(numeric(), c(40534, 39, 16, 6))
-# imgs_train_combined[,,,1:2] <- imgs_train
-# imgs_train_combined[,,,3:4] <- imgs_lagged
-# imgs_train_combined[,,,5:6] <- imgs_leaded
-#
-# imgs_train_lagged <- array(numeric(), c(40534, 39, 16, 4))
-# imgs_train_lagged[,,,1:2] <- imgs_train
-# imgs_train_lagged[,,,3:4] <- imgs_lagged
-#
-# imgs_train_lead <- array(numeric(), c(40534, 39, 16, 4))
-# imgs_train_lead[,,,1:2] <- imgs_leaded
-# imgs_train_lead[,,,3:4] <- imgs_train
+# create lead/lagged image versions
+imgs_lagged <- imgs_train_og
+imgs_lagged <- imgs_train_og[6:40539, 1:39, 1:16, 1:2]
+imgs_leaded <- imgs_train_og[8:40541, 1:39, 1:16, 1:2]
+
 
 # ------------------------------ create list obj. for modellig
 data <- list(
@@ -106,6 +98,7 @@ data <- list(
   month = df$month,
   day = df$day,
   year = df$year,
+  transition = df$transition,
   season = df$season,
   lag_1 = df$lag_1,
   lag_2 = df$lag_2,
@@ -114,17 +107,14 @@ data <- list(
   lag_5 = df$lag_5,
   lag_6 = df$lag_6,
   gwl = df$value,
-  curr_length = df$curr_length
-  #image_lagged = imgs_lagged,
-  #image_lead = imgs_leaded,
-  #image_combined_lagged_lead = imgs_train_combined,
-  #image_combined_lagged = imgs_train_lagged,
-  #image_combined_lead = imgs_train_lead
+  curr_length = df$curr_length,
+  image_lagged = imgs_lagged,
+  image_lead = imgs_leaded
 )
 
 
 # ------------------------------ create specific format for target var
-y <- to_categorical(as.numeric(as.factor(data$gwl))-1)
+y <- to_categorical(as.integer(as.factor(data$gwl))-1)
 
 # ------------------------------- Create class weights via inverse class frequency
 unique_classes <- levels(data$gwl)
@@ -132,12 +122,9 @@ class_weights <- list(c(1:length(unique_classes)))
 
 for (i in seq_along(unique_classes)) {
   current_class <- unique_classes[i]
-  print(current_class)
   n_all <- length(data$gwl)
   nmb_classes <- length(unique_classes)
   sum_current <- length(data$gwl[data$gwl == current_class])
-  #class_weigths[[i]] <- sum_current/length(data$gwl)
-  #class_weights[[i]] <- n_all/(nmb_classes*sum_current)
   class_weights[[i]] <- n_all/(sum_current)
 
 }

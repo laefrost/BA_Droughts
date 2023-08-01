@@ -1,3 +1,6 @@
+### Info: Implements EDA for circulation patterns
+### Called from: -
+
 library(ggplot2)
 library(rcompanion)
 library(RColorBrewer)
@@ -12,7 +15,6 @@ source("preprocessing.R")
 colours_classes <- palette.colors(palette = "Okabe-Ito")[2:9]
 viz_years_breaks <- c("1900", "1910", "1920", "1930", "1940", "1950", "1960", "1970", "1980", "1990", "2000", "2010")
 viz_ordered_classes <- c("BM", "HFA", "HNA", "HNFA", "NEA", "SEA", "other")
-#palette_gwls <- brewer.pal(n = 7, name = "Dark2")
 palette_gwls <- c("#6e2474", "#eee009","#ad1313","#60adce","#e925e0","#e3a51d","#95cb77")
 
 # ------------------------------- Plots of circulation pattern distribution

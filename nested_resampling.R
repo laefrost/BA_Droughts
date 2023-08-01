@@ -1,3 +1,6 @@
+### Info: Contains functions for nested resampling
+### Called from: models.R
+
 library(mgcv)
 library(dplyr)
 library(ggplot2)
@@ -20,13 +23,13 @@ set.seed(123456)
 # splits: list of train - val - test indices
 # x_train: prepared training data
 # learning_rate: hyp. for optimizer
-# batch_size: hyp. for optimizer
+# batch_size: hyp. of batch size
 # df: dataframe of observations
 # class_weights: Weights used for cost-sensitive learning
 # curr_length_existing: Boolean, if curr_length is included in model
 # lags_existing: Boolean, if lags is included in model
 # nmb_of_lags: int, degree of lags included
-# RETURN if predecessor-dependent covariates are present: (fit_history, list of "false" oos evaluation, list of "true" oos evaluation)
+# RETURN if predecessor-dependent covariates are present: (fit_history, list of known predecessor oos evaluation, list of unknown predecessor oos evaluation)
 # RETURN if no predecessor-dependent covariates are present: (fit_history, list of oos evaluation)
 rep_ho <-
   function(x,
@@ -101,12 +104,12 @@ rep_ho <-
       # evaluate performance using a confusion matrix
       cm <- confusionMatrix(predicted_classes, df$value[test_indcs])
 
-      # list of ("false") evaluation: predictions, the corresponding confusion matrix and the predicted classes
+      # list of (known predecessor) evaluation: predictions, the corresponding confusion matrix and the predicted classes
       list_pred_is <- list(predictions, cm, predicted_classes)
 
-      # do "true" oos evaluation if predecessor dependent covariates are present
+      # do unknown predecessor oos evaluation if predecessor dependent covariates are present
       if (curr_length_existing | lags_existing) {
-        # list of "true" oos evaluation
+        # list of unknown predecessor oos evaluation
         list_pred_oos <-
           create_oos_forecast(
             predictions,
@@ -135,9 +138,9 @@ rep_ho <-
   }
 
 
-# TITLE: Does iterative testing procedure for "true" oos evaluation
-# predictions: data frame of predictions from "false" oos evaluation
-# predicted_classes: vector of predicted classes from "false" oos evaluation
+# TITLE: Does iterative testing procedure for unknown predecessor oos evaluation
+# predictions: data frame of predictions from known predecessor oos evaluation
+# predicted_classes: vector of predicted classes from known predecessor oos evaluation
 # x: deepregression object
 # test_indcs: indces of test set
 # test_data: dataset of test indices
@@ -146,7 +149,7 @@ rep_ho <-
 # curr_length_existing: Boolean, if curr_length is included in model
 # lags_existing: Boolean, if lags is included in model
 # nmb_of_lags: int, degree of lags included
-# RETURN if predecessor-dependent covariates are present: (fit_history, list of "false" oos evaluation, list of "true" oos evaluation)
+# RETURN if predecessor-dependent covariates are present: (fit_history, list of known predecessor oos evaluation, list of unknown predecessor oos evaluation)
 # RETURN if no predecessor-dependent covariates are present: (fit_history, list of oos evaluation)
 create_oos_forecast <-
   function(predictions,
@@ -209,7 +212,7 @@ replace_na <- function(x) {
 
 # TITLE: Aggregates the perforamnces of splits of repeated hold out procedure
 # results: list with result from rep_ho()
-# pos: int (2,3) indicating whether the (false) oos evaluation is to be evaluated
+# pos: int (2,3) indicating whether the known predecessor oos evaluation is to be evaluated
 # RETRUN: vector of avg. f1-score and avg. macro average recall
 evaluate_splits_rep_ho <- function(results, pos) {
   cms <- lapply(results, function(result)
@@ -237,7 +240,10 @@ evaluate_splits_rep_ho <- function(results, pos) {
 # callbacks: list of callbacks used for fitting
 # splits: list of train - val - test indices
 # df: dataframe containing test values
-# RETURN: list of outer rsmp. results (fit_history, list of ("false") oos evaluation, (list of "true" oos evaluation))
+# RETURN if predecessor-dependent covariates are present:
+# list of outer rsmp. results (fit_history, list of known predecessor oos evaluation, list of unknown predecessor oos evaluation )
+# RETURN if no predecessor-dependent covariates are present:
+# list of outer rsmp. results (fit_history, list of  oos evaluation)
 nested_rsmp_final <-
   function(x,
            splits,
@@ -262,40 +268,40 @@ nested_rsmp_final <-
     # empty list for results of the outer resampling splits
     results <- vector(mode = "list", length = length(splits_outer))
 
-    # iterate over outer iteration
-    for (outer in seq_along(splits_outer)) {
-      print(paste(outer, "outer"))
-      splits_inner <- splits[[2]][[outer]]
+     # iterate over outer iteration
+      for (outer in seq_along(splits_outer)) {
+        print(paste(outer, "outer"))
+        splits_inner <- splits[[2]][[outer]]
 
-      # do HP-tuning using inner splits
-      for (hps in 1:nrow(tuning_archive)) {
-        print(paste(hps, " tuning"))
-        # do rep hop for inner resmp. procedure
-        results_hps <-
-          rep_ho(
-            x,
-            og_weights,
-            callbacks,
-            splits_inner,
-            x_train,
-            tuning_archive[hps, "learning_rate"],
-            tuning_archive[hps, "batch_size"],
-            df,
-            class_weights,
-            F,
-            F,
-            nmb_of_lags
-          )
-        eval_res <- evaluate_splits_rep_ho(results_hps, 2)
-        tuning_archive[hps, 4:5] <- eval_res
-      }
+       #do HP-tuning using inner splits
+        for (hps in 1:nrow(tuning_archive)) {
+          print(paste(hps, " tuning"))
+          # do rep hop for inner resmp. procedure
+          results_hps <-
+            rep_ho(
+              x,
+              og_weights,
+              callbacks,
+              splits_inner,
+              x_train,
+              tuning_archive[hps, "learning_rate"],
+              tuning_archive[hps, "batch_size"],
+              df,
+              class_weights,
+              F,
+              F,
+              nmb_of_lags
+            )
+          eval_res <- evaluate_splits_rep_ho(results_hps, 2)
+          tuning_archive[hps, 4:5] <- eval_res
+        }
 
       print(tuning_archive)
-      # select best hp combination for split
-      learning_rate <-
-        tuning_archive$learning_rate[which.max(tuning_archive$avg_mf1)]
-      batch_size <-
-        tuning_archive$batch_size[which.max(tuning_archive$avg_mf1)]
+       # select best hp combination for split
+       learning_rate <-
+         tuning_archive$learning_rate[which.max(tuning_archive$avg_mf1)]
+       batch_size <-
+         tuning_archive$batch_size[which.max(tuning_archive$avg_mf1)]
 
       print(learning_rate)
       print(batch_size)

@@ -1,17 +1,11 @@
+### Info: Initializes models, does nested resampling and saves results into RDS files
+### Called from: -
+
 source("preprocessing.R")
 source("splits.R")
 source("nested_resampling.R")
 set.seed(12345678)
 
-print(class_weights)
-unique_classes <- levels(data$gwl)
-class_weights_tmp <- list(c(1:length(unique_classes)))
-
-for (i in seq_along(unique_classes)) {
-  class_weights_tmp[[i]] <-1
-}
-names(class_weights_tmp) <- c(0:6)
-print(class_weights_tmp)
 # -------------------------------- Modelling functions
 f1 <- function(y_true, y_pred) {
   true_positives <- k_sum(k_round(k_clip(y_true * y_pred, 0, 1)))
@@ -25,7 +19,6 @@ f1 <- function(y_true, y_pred) {
     2 * (precision * recall) / (precision + recall + k_epsilon())
   return(f1_val)
 }
-
 
 cnn_block <-
   function(filters,
@@ -103,130 +96,34 @@ tuning_archive <- data.frame(
   "avg_bal_acc" = 0
 )
 
-# -------------------------------- TEST MOD
-# mod_test <- deepregression(
-#       y = y,
-#       list_of_formulas = list(~ 1 + lag_1) ,
-#       family = "multinoulli",
-#       data = data,
-#       list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
-#       optimizer = optimizer_adam(learning_rate = 0.0001),
-#       #loss = tf$keras$losses$SparseCategoricalCrossentropy(),
-#       monitor_metrics = list(
-#         f1,
-#         "categorical_accuracy",
-#        "categorical_crossentropy",
-#         tf$keras$metrics$AUC(multi_label = T)
-#       )
-#     )
-#
-#  # str(data)
-#
+# -------------------------------- Model 1: Only images
+mod_imgs <- deepregression(
+    y = y,
+    list_of_formulas = list(~ 1 + d(image)) ,
+    family = "multinoulli",
+    data = data,
+    list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
+    optimizer = optimizer_adam(learning_rate = 0.0001),
+    monitor_metrics = list(
+      f1,
+      "categorical_accuracy",
+      "categorical_crossentropy",
+      tf$keras$metrics$AUC(multi_label = T)
+    )
+  )
 
-# # # #keras$losses$Loss$call("categorical_crossentropy")
-# # # tf$keras$losses$categorical_crossentropy
-# # tf$keras$losses$SparseCategoricalCrossentropy
-# # ?tf$keras$losses$categorical_crossentropy
-# # mod_test %>% fit()
-# #
-# mod_test_outer_res_2 <-
-#    nested_rsmp_final_tmp(mod_test,
-#                          splits,
-#                          tuning_archive,
-#                          df,
-#                          callbacks,
-#                          class_weights_tmp,
-#                           F, 0)
-#
-# plot(mod_test_outer_res_2[[1]][[1]])
-# str(mod_test_outer_res)
-#
-# saveRDS(mod_test_outer_res, "testmodel")
+  mod_imgs_outer_res <-
+    nested_rsmp_final(mod_imgs,
+                      splits,
+                      tuning_archive,
+                      df,
+                      callbacks,
+                      class_weights,
+                      F,
+                      F, 0)
+saveRDS(mod_imgs_outer_res, "mod_imgs_outer_res")
 
-#  str(mod_test_outer_res)
-# ?deepregression
-# -------------------------------- Model 1: Only images --- DONE
-# mod_imgs <- deepregression(
-#     y = y,
-#     list_of_formulas = list(~ 1 + d(image)) ,
-#     family = "multinoulli",
-#     data = data,
-#     list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
-#     optimizer = optimizer_adam(learning_rate = 0.0001),
-#     monitor_metrics = list(
-#       f1,
-#       "categorical_accuracy",
-#       "categorical_crossentropy",
-#       tf$keras$metrics$AUC(multi_label = T)
-#     )
-#   )
-#
-#   mod_imgs_outer_res <-
-#     nested_rsmp_final(mod_imgs,
-#                       splits,
-#                       tuning_archive,
-#                       df,
-#                       callbacks,
-#                       class_weights,
-#                       F,
-#                       F, 0)
-# saveRDS(mod_imgs_outer_res, "mod_imgs_outer_res")
-#
-# # -------------------------------- Model 2: Images and lags
-# mod_imgs_lags <- deepregression(
-#     y = y,
-#      list_of_formulas = list( ~ 1 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 + d(image)) ,
-#      family = "multinoulli",
-#      data = data,
-#      list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
-#      optimizer = optimizer_adam(learning_rate = 0.0001),
-#      monitor_metrics = list(
-#        f1,
-#        "categorical_accuracy",
-#        "categorical_crossentropy",
-#        tf$keras$metrics$AUC(multi_label = T)
-#           )
-#    )
-#
-#    mod_imgs_lags_outer_res <-
-#      nested_rsmp_final(mod_imgs_lags,
-#                        splits,
-#                        tuning_archive,
-#                        df,
-#                        callbacks,
-#                        class_weights,
-#                        F,
-#                        T, 6)
-# saveRDS(mod_imgs_lags_outer_res, "mod_imgs_lags_outer_res")
-#
-# # -------------------------------- Model 3: Images and season
-# mod_imgs_season <- deepregression(
-#     y = y,
-#     list_of_formulas = list( ~ 1 + season + d(image)) ,
-#     family = "multinoulli",
-#     data = data,
-#     list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
-#     optimizer = optimizer_adam(learning_rate = 0.0001),
-#     monitor_metrics = list(
-#       f1,
-#       "categorical_accuracy",
-#       "categorical_crossentropy",
-#       tf$keras$metrics$AUC(multi_label = T)
-#     )
-#   )
-#
-#   mod_imgs_season_outer_res <-
-#     nested_rsmp_final(mod_imgs_season,
-#                       splits,
-#                       tuning_archive,
-#                       df,
-#                       callbacks,
-#                       class_weights,
-#                       F,
-#                       F, 0)
-# saveRDS(mod_imgs_season_outer_res, "mod_imgs_season_outer_res")
-
-# -------------------------------- Model 4: Images and month
+# -------------------------------- Model 2: Images and month
 mod_imgs_month <- deepregression(
      y = y,
      list_of_formulas = list( ~ 1 + month + d(image)) ,
@@ -252,11 +149,65 @@ mod_imgs_month <- deepregression(
                        F,
                        F, 0)
 saveRDS(mod_imgs_month_outer_res, "mod_imgs_month_outer_res")
-#
-# -------------------------------- Model 5: Images and year
+
+# -------------------------------- Model 3: Images and season
+mod_imgs_season <- deepregression(
+    y = y,
+    list_of_formulas = list( ~ 1 + season + d(image)) ,
+    family = "multinoulli",
+    data = data,
+    list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
+    optimizer = optimizer_adam(learning_rate = 0.0001),
+    monitor_metrics = list(
+      f1,
+      "categorical_accuracy",
+      "categorical_crossentropy",
+      tf$keras$metrics$AUC(multi_label = T)
+    )
+  )
+
+  mod_imgs_season_outer_res <-
+    nested_rsmp_final(mod_imgs_season,
+                      splits,
+                      tuning_archive,
+                      df,
+                      callbacks,
+                      class_weights,
+                      F,
+                      F, 0)
+saveRDS(mod_imgs_season_outer_res, "mod_imgs_season_outer_res")
+
+# -------------------------------- Model 4: Images and year
 mod_imgs_year <- deepregression(
+  y = y,
+  list_of_formulas = list( ~ 1 + s(year) + d(image)) ,
+  family = "multinoulli",
+  data = data,
+  list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
+  optimizer = optimizer_adam(learning_rate = 0.0001),
+  monitor_metrics = list(
+    f1,
+    "categorical_accuracy",
+    "categorical_crossentropy",
+    tf$keras$metrics$AUC(multi_label = T)
+  )
+)
+
+mod_imgs_year_outer_res <-
+  nested_rsmp_final(mod_imgs_year,
+                    splits,
+                    tuning_archive,
+                    df,
+                    callbacks,
+                    class_weights,
+                    F,
+                    F, 0)
+saveRDS(mod_imgs_year_outer_res, "mod_imgs_year_outer_res")
+
+# -------------------------------- Model 5: Images, season and year
+ mod_imgs_season_year <- deepregression(
    y = y,
-   list_of_formulas = list( ~ 1 + s(year) + d(image)) ,
+   list_of_formulas = list(~ 1 + s(year) + season + d(image)) ,
    family = "multinoulli",
    data = data,
    list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
@@ -269,18 +220,51 @@ mod_imgs_year <- deepregression(
    )
  )
 
-mod_imgs_year_outer_res <-
-   nested_rsmp_final(mod_imgs_year,
-                     splits,
-                     tuning_archive,
-                     df,
-                     callbacks,
-                     class_weights,
-                     F,
-                     F, 0)
-saveRDS(mod_imgs_year_outer_res, "mod_imgs_year_outer_res")
+ mod_imgs_season_year_outer_res <-
+   nested_rsmp_final(
+     mod_imgs_season_year,
+     splits,
+     tuning_archive,
+     df,
+     callbacks,
+     class_weights,
+     F,
+     F,
+     0
+   )
+saveRDS(mod_imgs_season_year_outer_res,
+         "mod_imgs_season_year_outer_res")
 
-# -------------------------------- Model 5: images + lags + length
+
+# -------------------------------- Model 6: Images and lags
+mod_imgs_lags <- deepregression(
+    y = y,
+     list_of_formulas = list( ~ 1 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 + d(image)) ,
+     family = "multinoulli",
+     data = data,
+     list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
+     optimizer = optimizer_adam(learning_rate = 0.0001),
+     monitor_metrics = list(
+       f1,
+       "categorical_accuracy",
+       "categorical_crossentropy",
+       tf$keras$metrics$AUC(multi_label = T)
+          )
+   )
+
+   mod_imgs_lags_outer_res <-
+     nested_rsmp_final(mod_imgs_lags,
+                       splits,
+                       tuning_archive,
+                       df,
+                       callbacks,
+                       class_weights,
+                       F,
+                       T, 6)
+saveRDS(mod_imgs_lags_outer_res, "mod_imgs_lags_outer_res")
+
+
+# # -------------------------------- Model 7: images + lags + length
 mod_imgs_lags_length <- deepregression(
    y = y,
    list_of_formulas = list(
@@ -310,248 +294,114 @@ mod_imgs_lags_length_outer_res <-
 saveRDS(mod_imgs_lags_length_outer_res,
          "mod_imgs_lags_length_outer_res")
 
-# -------------------------------- Model 4: Images, lags and months
-# mod_imgs_lags_month <- deepregression(
-#   y = y,
-#   list_of_formulas = list( ~ 1 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 + month + d(image)) ,
-#   family = "multinoulli",
-#   data = data,
-#   list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
-#   optimizer = optimizer_adam(learning_rate = 0.0001),
-#   monitor_metrics = list(
-#     f1,
-#     "categorical_accuracy",
-#     "categorical_crossentropy",
-#     tf$keras$metrics$AUC(multi_label = T)
-#   )
-# )
-#
-# mod_imgs_lags_month_outer_res <-
-#   nested_rsmp_final(mod_imgs_lags_month,
-#                     splits,
-#                     tuning_archive,
-#                     df,
-#                     callbacks,
-#                     class_weights,
-#                     F,
-#                     T, 6)
-# saveRDS(mod_imgs_lags_month_outer_res, "mod_imgs_lags_month_outer_res")
+# -------------------------------- Model 7: Images, lags and year
+mod_imgs_lags_year <- deepregression(
+   y = y,
+   list_of_formulas = list( ~ 1 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 + s(year) + d(image)) ,
+  family = "multinoulli",
+   data = data,
+   list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
+   optimizer = optimizer_adam(learning_rate = 0.0001),
+   monitor_metrics = list(
+     f1,
+     "categorical_accuracy",
+     "categorical_crossentropy",
+     tf$keras$metrics$AUC(multi_label = T)
+   )
+ )
 
-# -------------------------------- Model 7: Images, lags and months and year
- # mod_imgs_lags_season_year <- deepregression(
- #   y = y,
- #   list_of_formulas = list( ~ 1 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 + s(year) + season + d(image)) ,
- #   family = "multinoulli",
- #   data = data,
- #   list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
- #   optimizer = optimizer_adam(learning_rate = 0.0001),
- #   monitor_metrics = list(
- #     f1,
- #     "categorical_accuracy",
- #     "categorical_crossentropy",
- #     tf$keras$metrics$AUC(multi_label = T)
- #   )
- # )
- #
- # mod_imgs_lags_season_year_outer_res <-
- #   nested_rsmp_final(mod_imgs_lags_season_year,
- #                     splits,
- #                     tuning_archive,
- #                     df,
- #                     callbacks,
- #                     class_weights,
- #                     F,
- #                     T, 6)
- # saveRDS(mod_imgs_lags_season_year_outer_res, "mod_imgs_lags_season_year_outer_res")
-
- # -------------------------------- Model 7: Images, season and year
- # mod_imgs_season_year_smooth <- deepregression(
- #   y = y,
- #   list_of_formulas = list( ~ 1 + s(year) + season + d(image)) ,
- #   family = "multinoulli",
- #   data = data,
- #   list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
- #   optimizer = optimizer_adam(learning_rate = 0.0001),
- #   monitor_metrics = list(
- #     f1,
- #     "categorical_accuracy",
- #     "categorical_crossentropy",
- #     tf$keras$metrics$AUC(multi_label = T)
- #   )
- # )
- #
- # mod_imgs_season_year_smooth_outer_res <-
- #   nested_rsmp_final(mod_imgs_season_year_smooth,
- #                     tuning_archive,
- #                     df,
- #                     callbacks,
- #                     class_weights,
- #                     F,
- #                     F, 6)
- # saveRDS(mod_imgs_season_year_smooth_outer_res, "mod_imgs_season_year_smooth_outer_res")
+mod_imgs_lags_year_outer_res <-
+   nested_rsmp_final(mod_imgs_lags_year,
+                     splits,
+                     tuning_archive,
+                     df,
+                     callbacks,
+                     class_weights,
+                     F,
+                     T, 6)
+ saveRDS(mod_imgs_lags_year_outer_res, "mod_imgs_lags_year_outer_res")
 
 
- # -------------------------------- Model 8: Images, Images-1
-#   mod_imgs_imgs_lagged <- deepregression(
-#      y = y,
-#      list_of_formulas = list( ~ 1 + d(image) + d1(image_lagged)) ,
-#      family = "multinoulli",
-#      data = data,
-#      list_of_deep_models = list(d = define_cnn(0.2, 2, 7), d1 = define_cnn(0.2, 2, 7)),
-#      optimizer = optimizer_adam(learning_rate = 0.0001),
-#      monitor_metrics = list(
-#        f1,
-#        "categorical_accuracy",
-#        "categorical_crossentropy",
-#        tf$keras$metrics$AUC(multi_label = T)
-#     )
-#     )
-#
-#   mod_imgs_imgs_lagged_outer_res <-
-#      nested_rsmp_final_tmp(mod_imgs_imgs_lagged,
-#                            splits,
-#                        tuning_archive,
-#                        df,
-#                        callbacks,
-#                        class_weights,
-#                        F,
-#
-#                                               F, 0)
-# saveRDS(mod_imgs_imgs_lagged_outer_res, "mod_imgs_imgs_lagged_outer_res_00001")
-# #
-# #  # # -------------------------------- Model 8: Images, Images-1, Images + 1
-# mod_imgs_imgs_lagged_lead <- deepregression(
-#     y = y,
-#      list_of_formulas = list( ~ 1 + d(image) + d2(image_lagged) + d3(image_lead)) ,
-#      family = "multinoulli",
-#      data = data,
-#      list_of_deep_models = list(d = define_cnn(0.2, 2, 7), d2 = define_cnn(0.2, 2, 7), d3 = define_cnn(0.2, 2, 7)),
-#      optimizer = optimizer_adam(learning_rate = 0.0001),
-#      monitor_metrics = list(
-#        f1,
-#        "categorical_accuracy",
-#        "categorical_crossentropy",
-#         tf$keras$metrics$AUC(multi_label = T)
-#      )
-#    )
-#
-#    mod_imgs_imgs_lagged_lead_outer_res <-
-#      nested_rsmp_final_tmp(mod_imgs_imgs_lagged_lead,
-#                            splits,
-#                            tuning_archive,
-#                            df,
-#                            callbacks,
-#                           class_weights,
-#                           F,
-#                           F, 0)
-#  saveRDS(mod_imgs_imgs_lagged_lead_outer_res, "mod_imgs_imgs_lagged_lead_outer_res_00001")
-#
-# # # -------------------------------- Model 8: Images, Images-1, Images + 1
-# mod_imgs_imgs_lead <- deepregression(
-#      y = y,
-#      list_of_formulas = list( ~ 1 + d(image) + d1(image_lead)) ,
-#      family = "multinoulli",
-#      data = data,
-#      list_of_deep_models = list(d = define_cnn(0.2, 2, 7), d1 = define_cnn(0.2, 2, 7)),
-#      optimizer = optimizer_adam(learning_rate = 0.0001),
-#      monitor_metrics = list(
-#        f1,
-#        "categorical_accuracy",
-#        "categorical_crossentropy",
-#        tf$keras$metrics$AUC(multi_label = T)
-#      )
-#    )
-#
-#    mod_imgs_imgs_lead_outer_res <-
-#      nested_rsmp_final_tmp(mod_imgs_imgs_lead,
-#                            splits,
-#                            tuning_archive,
-#                            df,
-#                            callbacks,
-#                            class_weights,
-#                            F,
-#                            F, 0)
-#  saveRDS(mod_imgs_imgs_lead_outer_res, "mod_imgs_imgs_lead_outer_res_00001")
-# -------------------------------- Model 8: Images, Images-1
-#  mod_imgs_imgs_lagged_year_season <- deepregression(
-#    y = y,
-#    list_of_formulas = list( ~ 1 + s(year) + season + d(image) + d(image_lagged)) ,
-#    family = "multinoulli",
-#    data = data,
-#    list_of_deep_models = list(d = define_cnn(0.2, 2, 7)),
-#    optimizer = optimizer_adam(learning_rate = 0.0001),
-#    monitor_metrics = list(
-#      f1,
-#      "categorical_accuracy",
-#      "categorical_crossentropy",
-#      tf$keras$metrics$AUC(multi_label = T)
-#    )
-#  )
-#
-#  mod_imgs_imgs_lagged_year_season_outer_res <-
-#   nested_rsmp_final_tmp(mod_imgs_imgs_lagged_year_season,
-#                          splits,
-#                      tuning_archive,
-#                      df,
-#                      callbacks,
-#                      class_weights,
-#                      F,
-#                      F, 0)
-#
-# saveRDS(mod_imgs_imgs_lagged_year_season, "mod_imgs_imgs_lagged_year_season_outer_res")
-# mod_imgs_imgs_lagged_lead_season_year <- deepregression(
-#      y = y,
-#      list_of_formulas = list( ~ 1 + season + year + d(image) + d3(image_lead)) ,
-#       family = "multinoulli",
-#       data = data,
-#       list_of_deep_models = list(d = define_cnn(0.2, 2, 7), d3 = define_cnn(0.2, 2, 7)),
-#       optimizer = optimizer_adam(learning_rate = 0.0001),
-#       monitor_metrics = list(
-#         f1,
-#         "categorical_accuracy",
-#         "categorical_crossentropy",
-#          tf$keras$metrics$AUC(multi_label = T)
-#       )
-#     )
-#
-# mod_imgs_imgs_lagged_lead_season_year_outer_res <-
-#       nested_rsmp_final_tmp(mod_imgs_imgs_lagged_lead_season_year,
-#                             splits,
-#                             tuning_archive,
-#                             df,
-#                             callbacks,
-#                            class_weights,
-#                            F,
-#                           F, 0)
-#
-# saveRDS(mod_imgs_imgs_lagged_lead_season_year_outer_res,
-#         "mod_imgs_imgs_lagged_lead_season_year_outer_res")
-#
-#
-#
-#
-# mod_imgs_imgs_lead_lags_image <- deepregression(
-#    y = y,
-#    list_of_formulas = list( ~ 1 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 + d(image) + d1(image_lead)) ,
-#    family = "multinoulli",
-#    data = data,
-#    list_of_deep_models = list(d = define_cnn(0.2, 2,7), d1 = define_cnn(0.2, 2,7)),
-#    optimizer = optimizer_adam(learning_rate = 0.0001),
-#    monitor_metrics = list(
-#      f1,
-#      "categorical_accuracy",
-#      "categorical_crossentropy",
-#      tf$keras$metrics$AUC(multi_label = T)
-#    )
-#  )
-#
-#  mod_imgs_imgs_lead_lags_outer_res <-
-#    nested_rsmp_final_tmp(mod_imgs_imgs_lead_lags_image,
-#                          splits,
-#                          tuning_archive,
-#                          df,
-#                          callbacks,
-#                          class_weights,
-#                          T,
-#                          T, 1)
-#  saveRDS(mod_imgs_imgs_lead_lags_outer_res, "mod_imgs_imgs_lead_lags_outer_res")
+# -------------------------------- Model: Images, Images-1
+mod_imgs_imgs_lagged <- deepregression(
+  y = y,
+  list_of_formulas = list(~ 1 + d(image) + d1(image_lagged)) ,
+  family = "multinoulli",
+  data = data,
+  list_of_deep_models = list(d = define_cnn(0.2, 2, 7), d1 = define_cnn(0.2, 2, 7)),
+  optimizer = optimizer_adam(learning_rate = 0.0001),
+  monitor_metrics = list(
+    f1,
+    "categorical_accuracy",
+    "categorical_crossentropy",
+    tf$keras$metrics$AUC(multi_label = T)
+  )
+)
+
+mod_imgs_imgs_lagged_outer_res <-
+  nested_rsmp_final(mod_imgs_imgs_lagged,
+                        splits,
+                        tuning_archive,
+                        df,
+                        callbacks,
+                        class_weights,
+                        F,
+                        F,
+                        0)
+saveRDS(mod_imgs_imgs_lagged_outer_res,
+        "mod_imgs_imgs_lagged_outer_res")
+
+# -------------------------------- Model 8: Images, Images-1, Images + 1
+mod_imgs_imgs_lagged_lead <- deepregression(
+     y = y,
+      list_of_formulas = list( ~ 1 + d(image) + d2(image_lagged) + d3(image_lead)) ,
+      family = "multinoulli",
+      data = data,
+     list_of_deep_models = list(d = define_cnn(0.2, 2, 7), d2 = define_cnn(0.2, 2, 7), d3 = define_cnn(0.2, 2, 7)),
+      optimizer = optimizer_adam(learning_rate = 0.0001),
+      monitor_metrics = list(
+        f1,
+        "categorical_accuracy",
+        "categorical_crossentropy",
+         tf$keras$metrics$AUC(multi_label = T)
+      )
+    )
+
+    mod_imgs_imgs_lagged_lead_outer_res <-
+      nested_rsmp_final(mod_imgs_imgs_lagged_lead,
+                            splits,
+                            tuning_archive,
+                            df,
+                            callbacks,
+                           class_weights,
+                           F,
+                           F, 0)
+
+saveRDS(mod_imgs_imgs_lagged_lead_outer_res, "mod_imgs_imgs_lagged_lead_outer_res")
+
+# -------------------------------- Model 8: Images, Images + 1
+mod_imgs_imgs_lead <- deepregression(
+      y = y,
+      list_of_formulas = list( ~ 1 + d(image) + d1(image_lead)) ,
+      family = "multinoulli",
+      data = data,
+      list_of_deep_models = list(d = define_cnn(0.2, 2, 7), d1 = define_cnn(0.2, 2, 7)),
+      optimizer = optimizer_adam(learning_rate = 0.0001),
+      monitor_metrics = list(
+        f1,
+        "categorical_accuracy",
+        "categorical_crossentropy",
+        tf$keras$metrics$AUC(multi_label = T)
+      )
+    )
+
+    mod_imgs_imgs_lead_outer_res <-
+      nested_rsmp_final(mod_imgs_imgs_lead,
+                            splits,
+                            tuning_archive,
+                            df,
+                            callbacks,
+                            class_weights,
+                            F,
+                            F, 0)
+saveRDS(mod_imgs_imgs_lead_outer_res, "mod_imgs_imgs_lead_outer_res")
