@@ -34,7 +34,7 @@ The main purpose and most important functions of each subsection are sketched in
   * Saves .tex/.png for confusion matrices/plots generated
   * Called from: `models_evaluation.R`
 
-**2. models_evaluation.R**
+2. `models_evaluation.R`
   * Reads RDS-files per model and does performance evaluation for `performance_evaluation_functions.R` for each
 
 ### Result data
